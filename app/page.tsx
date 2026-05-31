@@ -494,7 +494,7 @@ export default function Home() {
                     </div>
                     <div className="text-right">
                       <p className={`font-bold text-xl ${STAR_COLORS[activeTab]}`}>
-                        {hotel.priceBreakdown?.grossPrice?.amountRounded}
+                        {fmt(hotel.priceBreakdown?.grossPrice?.value || 0)}
                       </p>
                       <p className="text-gray-500 text-xs">per night</p>
                     </div>
