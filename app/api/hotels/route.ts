@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCurrencyForCountry } from '@/lib/currency-utils';
+import { getCurrencyByCode, getCurrencyForCountry } from '@/lib/currency-utils';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { HotelSnapshot } from '@/lib/types';
 
@@ -24,7 +24,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const city = (searchParams.get('city') || 'New York').trim();
   const cacheKey = city.toLowerCase();
-  const fallbackCurrency = getCurrencyForCountry('US');
+  const cityCountryCode = getCountryCodeForCity(cacheKey);
+  const fallbackCurrency = getCurrencyForCountry(cityCountryCode || 'US');
 
   const cachedSnapshot = await getCachedSnapshot(cacheKey);
   if (cachedSnapshot) {
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       data: demoHotels,
       currency: fallbackCurrency,
-      countryCode: 'US',
+      countryCode: cityCountryCode || 'US',
       demo: true,
       cached: false,
     });
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         data: demoHotels,
         currency: fallbackCurrency,
-        countryCode: 'US',
+        countryCode: cityCountryCode || 'US',
         demo: true,
         cached: false,
       });
@@ -132,7 +133,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       data: demoHotels,
       currency: fallbackCurrency,
-      countryCode: 'US',
+      countryCode: cityCountryCode || 'US',
       demo: true,
       cached: false,
       warning: String(error),
@@ -156,10 +157,34 @@ async function getCachedSnapshot(city: string) {
 
   if (error || !data?.competitor_data) return null;
 
+  const competitorData = data.competitor_data as HotelSnapshot[];
+  const isDemoCache = competitorData.some((hotel) =>
+    String(hotel.id || '').startsWith('demo-')
+  );
+
+  if (isDemoCache && process.env.RAPIDAPI_KEY) return null;
+
+  const countryCode =
+    getCountryCodeFromHotelData(competitorData) ||
+    getCountryCodeForCity(city);
+  const dataCurrency = getCurrencyFromHotelData(competitorData);
+  const currency =
+    countryCode
+      ? getCurrencyForCountry(countryCode)
+      : dataCurrency;
+
+  if (
+    process.env.RAPIDAPI_KEY &&
+    getCountryCodeForCity(city) === 'IN' &&
+    dataCurrency?.code === 'USD'
+  ) {
+    return null;
+  }
+
   return {
-    competitor_data: data.competitor_data,
-    currency: getCurrencyFromHotelData(data.competitor_data) || getCurrencyForCountry('US'),
-    country_code: 'US',
+    competitor_data: competitorData,
+    currency: currency || getCurrencyForCountry('US'),
+    country_code: countryCode || 'US',
     fetched_at: data.fetched_at,
   };
 }
@@ -202,12 +227,42 @@ async function saveSnapshot({
 }
 
 function getCurrencyFromHotelData(data: HotelSnapshot[]) {
-  const rounded = data[0]?.priceBreakdown?.grossPrice?.amountRounded;
+  const grossPrice = data[0]?.priceBreakdown?.grossPrice;
+  const currencyCode = grossPrice?.currency;
+
+  if (currencyCode) return getCurrencyByCode(currencyCode);
+
+  const rounded = grossPrice?.amountRounded;
   if (!rounded) return null;
 
   if (rounded.startsWith('$')) return getCurrencyForCountry('US');
   if (rounded.startsWith('£')) return getCurrencyForCountry('GB');
   if (rounded.startsWith('€')) return getCurrencyForCountry('DE');
+  if (rounded.startsWith('₹')) return getCurrencyForCountry('IN');
+
+  return null;
+}
+
+function getCountryCodeFromHotelData(data: HotelSnapshot[]) {
+  const countryCode = data.find((hotel) => hotel.countryCode)?.countryCode;
+  return countryCode?.toUpperCase();
+}
+
+function getCountryCodeForCity(city: string) {
+  const normalizedCity = city.toLowerCase();
+
+  if (
+    normalizedCity.includes('delhi') ||
+    normalizedCity.includes('chennai') ||
+    normalizedCity.includes('mumbai') ||
+    normalizedCity.includes('bangalore') ||
+    normalizedCity.includes('bengaluru') ||
+    normalizedCity.includes('hyderabad') ||
+    normalizedCity.includes('kolkata') ||
+    normalizedCity.includes('pune')
+  ) {
+    return 'IN';
+  }
 
   return null;
 }

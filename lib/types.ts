@@ -2,6 +2,7 @@ export interface HotelSnapshot {
   id?: string;
   name?: string;
   city?: string;
+  countryCode?: string;
   current_price?: number;
   propertyClass?: number;
   reviewScoreWord?: string;
@@ -12,6 +13,7 @@ export interface HotelSnapshot {
     grossPrice?: {
       value?: number;
       amountRounded?: string;
+      currency?: string;
     };
   };
 }

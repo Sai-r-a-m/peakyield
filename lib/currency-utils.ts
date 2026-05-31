@@ -79,6 +79,15 @@ export function getCurrencyForCountry(countryCode: string): Currency {
   return COUNTRY_CURRENCY[countryCode.toUpperCase()] ?? USD;
 }
 
+export function getCurrencyByCode(currencyCode: string): Currency {
+  const normalizedCode = currencyCode.toUpperCase();
+  const match = Object.values(COUNTRY_CURRENCY).find(
+    (currency) => currency.code === normalizedCode
+  );
+
+  return match ?? USD;
+}
+
 export function formatPrice(amount: number, currency: Currency): string {
   const rounded = Math.round(amount);
   return `${currency.symbol}${rounded.toLocaleString('en-US')}`;
